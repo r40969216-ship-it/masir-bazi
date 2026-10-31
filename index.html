@@ -1,0 +1,136 @@
+from pathlib import Path
+
+html = r'''<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>بازی مسیر انتخاب‌ها</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Tahoma,Arial,sans-serif;background:linear-gradient(135deg,#eaf7ef,#f1f3ff);color:#20312a}
+  .wrap{max-width:1050px;margin:24px auto;padding:16px}
+  header{text-align:center;margin-bottom:18px}
+  h1{margin:0 0 8px;color:#176b45;font-size:clamp(24px,4vw,36px)}
+  .sub{color:#53665d;line-height:1.9;margin:0}
+  .panel{background:#fff;border-radius:18px;padding:18px;box-shadow:0 8px 24px #183b2914;margin:14px 0}
+  .top{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap;align-items:center}
+  .stat{background:#f2f8f4;border-radius:12px;padding:10px 14px;font-weight:bold}
+  .board{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-top:16px}
+  .cell{min-height:82px;border:2px solid #d8e7dd;border-radius:13px;background:#f8fcf9;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:7px;position:relative;font-size:13px}
+  .cell small{color:#708078;margin-top:5px}
+  .cell.start{background:#e6f6eb;border-color:#5ca978}
+  .cell.finish{background:#fff5d9;border-color:#e4b94c}
+  .cell.good{border-color:#64ad7d;background:#eaf8ee}
+  .cell.bad{border-color:#bd8b8b;background:#fff0f0}
+  .token{font-size:21px;position:absolute;top:3px;left:6px}
+  .lanes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .lane{padding:13px;border-radius:14px;text-align:center;font-weight:bold}
+  .lane.goodlane{background:#e8f7ed;color:#176b45;border:1px solid #a9d7b7}
+  .lane.badlane{background:#fff0f0;color:#8a3b3b;border:1px solid #e3b5b5}
+  .question{font-size:19px;line-height:1.9;margin:4px 0 14px}
+  .choices{display:grid;gap:10px}
+  button{font-family:inherit;border:0;border-radius:12px;padding:13px 16px;font-size:15px;cursor:pointer;transition:.15s}
+  button:hover{transform:translateY(-1px);filter:brightness(.97)}
+  .choice{background:#eef6f0;text-align:right;border:1px solid #d5e7da;color:#244a34}
+  .choice:nth-child(2){background:#fff1f1;border-color:#eed0d0;color:#713b3b}
+  .mainbtn{background:#176b45;color:white;font-weight:bold}
+  .secondary{background:#edf0f5;color:#354153}
+  .feedback{min-height:48px;line-height:1.9;margin-top:12px;font-weight:bold}
+  .note{font-size:13px;color:#66766d;line-height:1.9}
+  @media(max-width:620px){.board{grid-template-columns:repeat(3,minmax(0,1fr))}.cell{min-height:72px}.lanes{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>🎲 بازی مسیر انتخاب‌ها</h1>
+  <p class="sub">یک بازی آموزشی درباره انتخاب‌های درست و نادرست در زندگی؛ هر انتخاب، ما را به یک مسیر نزدیک‌تر می‌کند.</p>
+</header>
+
+<section class="panel">
+  <div class="top">
+    <div class="stat">⭐ امتیاز کارهای خوب: <span id="score">۰</span></div>
+    <div class="stat">📍 خانه: <span id="position">۱</span> از ۱۲</div>
+    <button class="secondary" onclick="restart()">شروع دوباره</button>
+  </div>
+  <div class="lanes" style="margin-top:14px">
+    <div class="lane goodlane">🌿 مسیر بندگی خداوند<br><small>راست‌گویی، مهربانی، کمک و انجام وظیفه</small></div>
+    <div class="lane badlane">🌫️ مسیر وسوسه و نافرمانی<br><small>دروغ، خودخواهی، آزار دیگران و بی‌توجهی</small></div>
+  </div>
+  <div class="board" id="board"></div>
+</section>
+
+<section class="panel">
+  <div id="prompt" class="question">برای شروع، روی «شروع بازی» بزن.</div>
+  <div id="choices" class="choices">
+    <button class="mainbtn" onclick="startGame()">شروع بازی</button>
+  </div>
+  <div id="feedback" class="feedback" aria-live="polite"></div>
+  <p class="note">روش بازی: در هر مرحله یکی از دو رفتار را انتخاب کن. انتخاب درست تو را در مسیر بندگی خداوند جلو می‌برد؛ انتخاب نادرست، تو را به مسیر وسوسه نزدیک می‌کند. هدف، فکر کردن درباره نتیجه رفتارهاست.</p>
+</section>
+</div>
+<script>
+const fa = n => String(n).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
+const questions = [
+ {q:"دوستت مدادش را گم کرده است. چه کار می‌کنی؟",a:"کمک می‌کنم دنبالش بگردد.",b:"به او می‌خندم و مسخره‌اش می‌کنم.",good:0,why:"کمک و مهربانی از رفتارهای پسندیده‌اند."},
+ {q:"در انجام تکلیف اشتباه کرده‌ای. چه می‌گویی؟",a:"اشتباه خودم را می‌پذیرم.",b:"دیگری را مقصر معرفی می‌کنم.",good:0,why:"پذیرفتن اشتباه و راست‌گویی کار درست است."},
+ {q:"کسی از تو کمک می‌خواهد و می‌توانی کمکش کنی.",a:"با احترام کمکش می‌کنم.",b:"بی‌دلیل او را نادیده می‌گیرم.",good:0,why:"کمک به دیگران و توجه به نیازشان ارزشمند است."},
+ {q:"پولی روی زمین پیدا می‌کنی و صاحبش را می‌شناسی.",a:"آن را به صاحبش برمی‌گردانم.",b:"آن را برای خودم نگه می‌دارم.",good:0,why:"امانت‌داری و حق‌الناس را رعایت کردن مهم است."},
+ {q:"هنگام عصبانیت چه رفتاری بهتر است؟",a:"آرام می‌شوم و با احترام حرف می‌زنم.",b:"با حرف‌های آزاردهنده دعوا را بیشتر می‌کنم.",good:0,why:"کنترل خشم و احترام به دیگران انتخاب بهتری است."},
+ {q:"وقتی کسی حقیقت را از تو می‌پرسد چه می‌کنی؟",a:"تا جایی که می‌دانم راست می‌گویم.",b:"برای راحتی خودم دروغ می‌گویم.",good:0,why:"راست‌گویی اعتماد را بیشتر می‌کند."},
+ {q:"وقت انجام مسئولیتت رسیده است.",a:"کارم را به‌موقع انجام می‌دهم.",b:"آن را بی‌دلیل به گردن دیگران می‌اندازم.",good:0,why:"مسئولیت‌پذیری نشانه رفتار درست است."},
+ {q:"دوستت موفق شده است. چه واکنشی نشان می‌دهی؟",a:"به او تبریک می‌گویم.",b:"از روی حسادت ناراحتش می‌کنم.",good:0,why:"خوشحالی برای موفقیت دیگران رفتار پسندیده‌ای است."},
+ {q:"در فضای مجازی پیامی توهین‌آمیز می‌بینی.",a:"آن را پخش نمی‌کنم و محترمانه رفتار می‌کنم.",b:"آن را برای دیگران می‌فرستم تا بخندند.",good:0,why:"آزار ندادن دیگران در فضای مجازی هم مهم است."},
+ {q:"می‌توانی بین تماشای بیشتر و انجام وظیفه‌ات انتخاب کنی.",a:"اول وظیفه‌ام را انجام می‌دهم.",b:"همیشه وظیفه‌ام را عقب می‌اندازم.",good:0,why:"انجام وظیفه و نظم به زندگی بهتر کمک می‌کند."},
+ {q:"کسی از تو عذرخواهی می‌کند.",a:"اگر صادقانه باشد، او را می‌بخشم.",b:"برای ناراحت کردنش کینه نگه می‌دارم.",good:0,why:"گذشت و بخشش، رابطه‌ها را بهتر می‌کند."},
+ {q:"در پایان روز، متوجه اشتباهت می‌شوی.",a:"تصمیم می‌گیرم آن را جبران کنم.",b:"اهمیتی نمی‌دهم و تکرارش می‌کنم.",good:0,why:"توبه، جبران اشتباه و تلاش برای بهتر شدن ارزشمند است."}
+];
+let index=0, score=0, active=false, path=[];
+function renderBoard(){
+ const b=document.getElementById('board'); b.innerHTML='';
+ for(let i=0;i<12;i++){
+  const c=document.createElement('div');
+  c.className='cell'+(i===0?' start':'')+(i===11?' finish':'')+(path[i]==='good'?' good':path[i]==='bad'?' bad':'');
+  let label=i===0?'شروع':i===11?'پایان':'مرحله '+fa(i);
+  let desc=path[i]==='good'?'مسیر خوب':path[i]==='bad'?'مسیر نادرست':(i===0?'آماده‌ای؟':'انتخاب کن');
+  c.innerHTML='<strong>'+label+'</strong><small>'+desc+'</small>'+(i===index&&active?'<span class="token">🧍</span>':'');
+  b.appendChild(c);
+ }
+}
+function startGame(){index=0;score=0;path=[];active=true;document.getElementById('score').textContent=fa(score);showQuestion();renderBoard();}
+function showQuestion(){
+ document.getElementById('prompt').textContent=questions[index].q;
+ const ch=document.getElementById('choices'); ch.innerHTML='';
+ const q=questions[index];
+ [q.a,q.b].forEach((v,i)=>{let btn=document.createElement('button');btn.className='choice';btn.textContent=(i===0?'🌿 ':'🌫️ ')+v;btn.onclick=()=>choose(i);ch.appendChild(btn);});
+ document.getElementById('feedback').textContent='';
+}
+function choose(choice){
+ if(!active)return;
+ const q=questions[index], good=choice===q.good;
+ path[index]=good?'good':'bad';
+ if(good)score++;
+ document.getElementById('score').textContent=fa(score);
+ document.getElementById('feedback').textContent=(good?'آفرین! 🌟 ':'این انتخاب پیامد خوبی ندارد. ') + q.why;
+ index++;
+ renderBoard();
+ const ch=document.getElementById('choices'); ch.innerHTML='';
+ if(index<questions.length){
+  let btn=document.createElement('button');btn.className='mainbtn';btn.textContent='مرحله بعد';btn.onclick=showQuestion;ch.appendChild(btn);
+ }else{
+  active=false;
+  document.getElementById('prompt').textContent='بازی به پایان رسید!';
+  let result=score>=10?'بسیار خوب! بیشتر انتخاب‌هایت در مسیر بندگی خداوند بود.':score>=7?'خوب بود! با فکر کردن به پیامد انتخاب‌ها می‌توانی بهتر عمل کنی.':'این بازی فرصتی برای یادگیری است؛ دفعه بعد انتخاب‌ها را با دقت بیشتری بررسی کن.';
+  document.getElementById('feedback').textContent=result+' امتیاز تو: '+fa(score)+' از ۱۲';
+  let btn=document.createElement('button');btn.className='mainbtn';btn.textContent='بازی دوباره';btn.onclick=startGame;ch.appendChild(btn);
+ }
+}
+function restart(){active=false;index=0;score=0;path=[];document.getElementById('score').textContent='۰';document.getElementById('prompt').textContent='برای شروع، روی «شروع بازی» بزن.';document.getElementById('choices').innerHTML='<button class="mainbtn" onclick="startGame()">شروع بازی</button>';document.getElementById('feedback').textContent='';renderBoard();}
+renderBoard();
+</script>
+</body>
+</html>'''
+path = Path("/mnt/data/bazi_masir_entekhab.html")
+path.write_text(html, encoding="utf-8")
+print(f"فایل بازی ساخته شد: {path}")
